@@ -1,0 +1,170 @@
+---
+title: "Functional Programming in R"
+author: "Michael Y Choie"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R is, at it's heart, a functional programming language
+This means R has many tools for the creation and manipulation of functions. R has what is known as **first class functions**. You can do anything to functions that you can do to vectors: assign them to variables, store them in lists, pass them as arguments to other functions, create them inside functions, even return them as the result of a function.
+
+In functional programming, we start with small, easy to understand building blocks, and then combine them together to make more complex structures. There are 3 building blocks to functional programming.
+
+1. Anonymous functions
+2. Closures (functions written by functions)
+3. Lists of functions
+
+Let's get started.
+
+## Generate sample dataset
+
+```{r}
+library(microbenchmark)
+library(tidyr)
+set.seed(1014)
+df <- data.frame(replicate(6, sample(c(1:10, -99), 6, rep = T)))
+names(df) <- letters[1:6]; df
+```
+
+## Functional programming tools help reduce duplication
+Say we want to replace all the values in the dataframe that have a value of -99. We could go column by column like this:
+
+```{r, eval = FALSE}
+df$a[df$a == 99] <- NA
+df$b[df$b == 99] <- NA
+df$d[df$c == 99] <- NA
+# and so on and so forth
+```
+
+Notice that it is easy to make typos (and it is just plain tedious if you do it this way).
+Follow the **DRY (Do not repeat yourself) principle**. We do this by applying **function composition**. In other words, we take two simple functions, one which does something to every column and one which fixes missing values, and combine them to fix missing values in every column.
+
+- Write a function that fixes these missing errors
+- Combine two functions: fix_missing() to fix a single vector, and lapply() to apply this function to each column
+
+By doing this, we have a compact piece of code that does an operation where, if need be, only needs to be changed in one location. There is no way we can miss any components, treat components differently, etc. 
+
+```{r}
+missing_fixer <- function(na_value){
+    function(x) {
+        x[x == na_value] <- NA
+        x
+    }
+}
+
+# Create functions using the closure
+fix_missing_99 <- missing_fixer(-99)
+fix_missing_999 <- missing_fixer(-999)
+
+# Use a functional to return the new list
+df[] <- lapply(df, fix_missing_99); df[]
+```
+
+## Storing functions in lists
+- Remove duplication of having to apply each function in the list to data
+- Remove duplication of having to specify parameters for each function
+
+```{r}
+summary <- function(x) { 
+    funs <- c(mean, median, sd, mad, IQR)
+    lapply(funs, function(f) f(x, na.rm = T))
+}
+unlist(lapply(df, summary))
+```
+
+You can also call specific functions within the list:
+
+```{r}
+compute_mean <- list(
+    base = function(x) mean(x),
+    sum = function(x) sum(x)/length(x),
+    manual = function(x) {
+        total <- 0 
+        n <- length(x)
+        for (i in seq_along(x)) {
+            total <- total + x[i] / n
+        }
+        total
+    },
+    manual2 = function(x){
+        total <- 0
+        n <- length(x)
+        total <- Reduce(`+`, lapply(seq_along(x), function(f) total + x[f] / n))
+    }
+)
+
+x <- runif(1e5)
+system.time(compute_mean$base)
+
+lapply(compute_mean, function(f) f(x))
+lapply(compute_mean, function(y) y(x) %>% microbenchmark)
+```
+
+
+## Closures
+
+We commonly use **anonymous functions** in **closures**, which is a type of a **higher-order function**. This is a lot of vocabulary so let's break this down. 
+
+- Anonymous functions are functions that are unnamed, as they are commonly used as a build block for higher-order functions
+- A higher-order function is a function that takes a function as an input or returns a function as output
+- Closures: functions written by another function. They get their name because they enclose the environment of the parent function
+- The complement to a closure is a functional, which is a function that takes a function as an input and returns a vector (i.e the apply() family)
+
+```{r}
+power <- function(exponent) {
+    function(x) {
+        x^exponent
+    }
+}
+
+square <- power(2)
+square(5)
+```
+
+## Mutable State
+
+We can take advantage of closures to maintain state between function calls. Use the operator `<<-` to manage variables at different levels. While `<-` always assigns in its current environment, `<<-` will keep looking up chain of parent environments until it finds a matching name.  
+
+```{r}
+new_counter <- function() { 
+    i <- 0
+    function() {
+        i <<- i + 1
+        i
+    }
+}
+
+counter_one <- new_counter()
+counter_two <- new_counter()
+
+counter_one()
+counter_one()
+counter_two()
+```
+
+## Moving list of functions to the global environment
+
+```{r}
+simple_tag <- function(tag) { 
+    #force(tag)
+    function(...) {
+        paste0("<", tag, ">", paste0(...), "</", tag, ">")
+    }
+}
+
+tags <- c("p", "b", "i")
+html <- lapply(setNames(tags, tags), simple_tag)
+
+# Verbose way of accessing functions
+html$p("This is ", html$b("bold"), " text.")
+
+# Recommended way: use with() - basically like a temporary attach() 
+with(html, p("This is ", b("bold"), " text."))
+```
+Note: Since R 3.2.0, higher order functions such as the apply functions and Reduce() now force arguments to the functions they apply in order to eliminate undesirable interactions between lazy evaluation and variable capture in closures.
+
+We originally had to add the force() because R only evaluates the argument passed to a function until it is actually used. The inner function creates an enclosure for the function, and its passed arguments is a "promise". Thus, you need to "capture" the current value of the argument using force(). Because otherwise, in the lapply statement, it would only evaluate on the latest value of the argument set. 
+
