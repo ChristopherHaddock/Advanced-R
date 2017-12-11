@@ -1,0 +1,50 @@
+---
+title: "Advanced R - Memory"
+author: "Michael Y Choie"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+R holds everything in memory (RAM), so it is important to understand how memory is allocated, especially with bigger datasets.
+
+## Generally, memory is allocated in a heap and stack:
+- The **stack** is used to keep track of variables/parameters local to a function in a program. Whenever you call a new function, a new stack frame is pushed to the stack with parameters and variables local to that function. When that function returns, the stack frame is popped out and the context switches back to the previous function (the caller).
+- A **heap** is a kind of a global memory pool. A function can allocate memory on the heap if it wants the data to live longer than the function itself. Objects allocated on the heap are accessible to all the functions, given they have the reference/address of the object to access it.
+
+In languages like C, you must explicitly allocate/free memory. In R, this is done automatically for us by the *garbage collector* (which removes objects that aren’t being referenced anymore). 
+
+## Memory in R has 2 dimensions: 
+- **VCells**: stores contents of vectors
+    - This is a heap 
+- **NCells**: stores everything else, including administrative overhead for vectors (i.e metadata)
+    - This is a fixed size
+
+## Vector contents also divided into two pools:
+- Memory for small vectors ( < 128 bytes) - obtained in large chunks and parceled out by R
+    - Small vector pool: R asks for a big block of memory and then manages that block itself
+    - This is because requesting memory (with malloc()) is a relatively expensive operation [ this is done in C ] 
+    - Having to request memory every time a small vector is created would slow R down considerably
+- Memory for large vectors - obtained directly from operating system
+	- This is because OS’s are good at this
+
+## Memory leaks 
+- When you don’t need an object anymore but you are unknowingly still pointing to it
+- Two main causes of this are due to closures and formulas because they both capture the enclosing environment 
+- **Memory fragmentation**: when you cannot allocate memory because there isn’t a big enough block of memory for your object
+
+## Modification in place
+- There are two possibilities when something is modified: 
+    - R modifies x in place
+    - R makes a copy of x to a new location, modifies the copy, and then uses the name x to point to the new location
+- If there is more than one variable pointing to x, R will make a copy (so that other items are unaffected) 
+- Functions can increase the reference count
+    - Non-primitive functions that touch the object always increment the ref count
+    - Primitive functions usually don’t
+	
+## Loops are notorious in R
+- Often the slowness is because you’re modifying a copy instead of modifying in place
+- Modifying a list uses primitive functions, so the refs are not incremented and all modifications occur in place
+- Modifying a data frame doesn’t, that’s why modifications are slower 
