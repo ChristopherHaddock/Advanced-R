@@ -1,0 +1,56 @@
+---
+title: "Advanced R - Performance"
+author: "Michael Y Choie"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R is a slow langauge
+R is not a fast language. This is not an accident. R was purposely designed to make data analysis and statistics easier for you to do. It was not designed to make life easier for your computer. While R is slow compared to other programming languages, for most purposes, it’s fast enough.
+
+## There are 3 tradeoffs that make R slow:
+1) Extreme dynamism
+2) Name lookup with mutable environments
+3) Lazy evaluation of function arguments
+
+Therefore, one must balance speed, flexibility, and ease of implementation to maximize performance of R.
+
+## Extreme Dynamism 
+- This is a problem because the easier it is to predict what’s going to happen, the easier it is for an interpreter or compiler to make an optimisation
+- If an interpreter can’t predict what’s going to happen, it has to consider many options before it finds the right one.
+
+## Name Lookup with Mutable Environments
+- It’s surprisingly difficult to find the value associated with a name in the R-language. 
+- This is due to combination of lexical scoping and extreme dynamism.
+
+## Lazy Evaluation of Function Arguments
+- R uses a promise object that contains expression to evaluate function arguments to implement lazy evaluation
+- Creating this promise object takes overhead so each argument decreases speed
+- In most other programming languages there is little overhead for adding extra arguments
+
+## How to increase performance
+Although there are limitations to R because of the way it was designed, oftentimes, R code runs slowly because it is written poorly. The main people who write in R are statisticians or mathematicians who may not have had formal computer science training. Therefore, R is used to crunch numbers and get to an answer quickly instead of being written for optimization. This means there are many things that we should be mindful to increase performance. 
+
+## Some base functions are slow
+Be mindful of certain base functions, and use microbenchmarking to ascertain optimal functions. For example, ifelse(), pmin(), pmax(), and mean() are slow.
+
+## Do as little as possible
+- Because of suboptimal functions, oftentimes it’s best to use functions that are tailored for a specific output/problem
+- Some functions coerce their inputs into a specific type. If your input is not the right type, the function has to do extra work
+- Other functions will do less work if you give them more information about the problem (fill in arguments)
+- Use simpler data structures; i.e it’s faster to work with row indices than the whole data frame 
+
+## Vectorize operations
+Vectorizing operations means finding R functions that are implemented in C for speed because there is less overhead.
+
+- rowSums(), colSums(), rowMeans(), and colMeans() are faster than equivalent invocations that use apply() because they are vectorised
+
+## Avoid copies
+- For certain functions, whenever creating a bigger object, R must first allocate space for the new object and then copy the old object to its new home: c(), append(), cbind(), rbind(), or paste()
+- Be extremely careful of unintentionally creating copies while in a loop
+
+## Parallelize for speed
+Finally, we can take advantage of several packages in R that can create a backend cluster that runs operations in parallel. This way, we can take advantage of our multi-core computers/servers.
